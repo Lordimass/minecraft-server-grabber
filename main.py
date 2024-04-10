@@ -1,5 +1,6 @@
 from requests import get
 from colorama import Fore, Back, Style
+from threading import Thread
 import json
 import time
 
@@ -9,11 +10,14 @@ SOCKET      = IP + ":" + PORT
 API_PREFIX  = "https://api.mcsrvstat.us"
 API_VERSION = 3
 API_URL     = API_PREFIX + "/" + str(API_VERSION) + "/" + SOCKET
+
 CPM         = 0.2 # Coins per minute
 DAILY_BONUS = 10
+DAILY_MULTIPLIER = 1.3
+
+keep_checking = True
 
 online = []
-logged_on_today = []
 
 
 def api_call(): # Returns a JSON of data from the server API
@@ -31,15 +35,16 @@ def log_off(player): # Calculates Crazy Coins to award and removes player from l
     online.pop(online.index(player))
     time_played = time.time() - player["log_on_time"]
     coins = int((time_played/60) * CPM)
-    tprint(f"{player["name"]} has left the game. Earning {coins} Crazy Coins")
+    tprint(f"{player['name']} has left the game. Earning {coins} Crazy Coins")
     give_coins(player["name"], coins)
 
-def give_coins(name, amount):
-    pass
+def give_coins(name, amount): # Gives coins to a specified player
+    amount = int(amount)
+    tprint(f"Giving {amount}CC to {name}")
 
-def tprint(message):
+def tprint(message): # Prefixes print message with a timestamp
     now = time.strftime("[%H:%M:%S]")
-    print(Fore.GREEN + now, Style.RESET_ALL + message)
+    print(Fore.GREEN + Style.BRIGHT + now, Style.RESET_ALL + message)
 
 def update_player_list(): # Updates the array of currently online players.
     fetch = get_player_list()
@@ -63,14 +68,61 @@ def update_player_list(): # Updates the array of currently online players.
                 break
 
         if not found:
-            tprint(f"{record["name"]} has joined the game")
-            if record not in logged_on_today():
-                logged_on_today.append(record)
-                give_coins(record["name"], 10)
+            tprint(f"{record['name']} has joined the game")
             record["log_on_time"] = time.time()
             online.append(record)
+    
+    update_streaks()
+
+def days_since(timestamp): # Calculates how many full days it has been since a given timestamp
+    S = 86400
+    epoch_daystamp = timestamp//S
+    epoch_todaystamp = time.time()//S
+    return epoch_todaystamp - epoch_daystamp
+
+def update_streaks(): # Updates user log on streaks 
+    j = open("streaks.json")
+    streaks = json.load(j)["players"]
+    j.close()
+
+    for player in online:
+        found = False
+        for entry in streaks:
+            if player["name"] == entry["name"]:
+                found = True
+                break
+        if not found:
+            new_entry = player.copy()
+            del new_entry["log_on_time"]
+            new_entry["last_log_in"] = time.time()
+            new_entry["streak"] = 1
+            streaks.append(new_entry)
+            give_coins(new_entry["name"], DAILY_BONUS)
+        if found:
+            days = days_since(entry["last_log_in"])
+            if days == 1:
+                entry["streak"] += 1
+            elif days > 1:
+                entry["streak"] = 1
+
+            entry["last_log_in"] = time.time()
+            give_coins(entry["name"], DAILY_BONUS*DAILY_MULTIPLIER**(entry["streak"]-1))
+
+    j = open("streaks.json", "w")
+    json.dump({"players": streaks}, j)
+    j.close()
+    
+def mainloop():
+    tprint("Started checking for players")
+    start_time = time.time()
+    while keep_checking:
+        update_player_list()
+        time.sleep(30)
+    tprint(f"Stopped checking for players. The function was checking for {round((time.time() - start_time)/60)} minute(s).")
 
 
-while True:
-    update_player_list()
-    time.sleep(30)
+thread = Thread(name="mainloop", target=mainloop)
+thread.start()
+input()
+tprint("Process interrupted, finishing cycle")
+keep_checking = False
