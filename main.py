@@ -10,8 +10,10 @@ API_PREFIX  = "https://api.mcsrvstat.us"
 API_VERSION = 3
 API_URL     = API_PREFIX + "/" + str(API_VERSION) + "/" + SOCKET
 CPM         = 0.2 # Coins per minute
+DAILY_BONUS = 10
 
 online = []
+logged_on_today = []
 
 
 def api_call(): # Returns a JSON of data from the server API
@@ -21,21 +23,23 @@ def api_call(): # Returns a JSON of data from the server API
 
 def get_player_list(): # Returns a list of currently online players
     data = api_call()
-    if data["players"]["online"] == 0: # Handling case where the list of players doesn't exist
+    if data["players"]["online"] == 0 or data["online"] == False: # Handling case where the list of players doesn't exist or the server is offline.
         return []
     return data["players"]["list"]
         
 def log_off(player): # Calculates Crazy Coins to award and removes player from list of online players
     online.pop(online.index(player))
-    coins = 0
     time_played = time.time() - player["log_on_time"]
-    coins += int(time_played * CPM)
+    coins = int((time_played/60) * CPM)
     tprint(f"{player["name"]} has left the game. Earning {coins} Crazy Coins")
+    give_coins(player["name"], coins)
+
+def give_coins(name, amount):
+    pass
 
 def tprint(message):
     now = time.strftime("[%H:%M:%S]")
     print(Fore.GREEN + now, Style.RESET_ALL + message)
-
 
 def update_player_list(): # Updates the array of currently online players.
     fetch = get_player_list()
@@ -60,6 +64,9 @@ def update_player_list(): # Updates the array of currently online players.
 
         if not found:
             tprint(f"{record["name"]} has joined the game")
+            if record not in logged_on_today():
+                logged_on_today.append(record)
+                give_coins(record["name"], 10)
             record["log_on_time"] = time.time()
             online.append(record)
 
