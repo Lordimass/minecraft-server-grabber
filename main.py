@@ -35,12 +35,16 @@ def log_off(player): # Calculates Crazy Coins to award and removes player from l
     online.pop(online.index(player))
     time_played = time.time() - player["log_on_time"]
     coins = int((time_played/60) * CPM)
-    tprint(f"{player['name']} has left the game. Earning {coins} Crazy Coins")
-    give_coins(player["name"], coins)
+    tprint(f"{player['name']} has left the game. Earning {coins} Crazy Coin(s)")
+    give_coins(player["name"], coins, f"Playing on Reformation MC for {int(time_played/60)}")
 
-def give_coins(name, amount): # Gives coins to a specified player
+def give_coins(name, amount, reason = None): # Gives coins to a specified player
     amount = int(amount)
-    tprint(f"Giving {amount}CC to {name}")
+    string = f"Giving {amount}CC to {name}"
+    if reason == None:
+        tprint(string)
+    else:
+        tprint(string + f", '{reason}'")
 
 def tprint(message): # Prefixes print message with a timestamp
     now = time.strftime("[%H:%M:%S]")
@@ -81,12 +85,14 @@ def days_since(timestamp): # Calculates how many full days it has been since a g
     return epoch_todaystamp - epoch_daystamp
 
 def update_streaks(): # Updates user log on streaks 
+    coin_reason = f"Reformation MC log-in streak of {entry['streak']}"
     j = open("streaks.json")
     streaks = json.load(j)["players"]
     j.close()
 
     for player in online:
         found = False
+        needs_coins = False
         for entry in streaks:
             if player["name"] == entry["name"]:
                 found = True
@@ -97,16 +103,21 @@ def update_streaks(): # Updates user log on streaks
             new_entry["last_log_in"] = time.time()
             new_entry["streak"] = 1
             streaks.append(new_entry)
-            give_coins(new_entry["name"], DAILY_BONUS)
+            give_coins(new_entry["name"], DAILY_BONUS, coin_reason)
         if found:
             days = days_since(entry["last_log_in"])
             if days == 1:
                 entry["streak"] += 1
+                needs_coins = True
             elif days > 1:
                 entry["streak"] = 1
+                needs_coins = True
 
             entry["last_log_in"] = time.time()
-            give_coins(entry["name"], DAILY_BONUS*DAILY_MULTIPLIER**(entry["streak"]-1))
+            if needs_coins: give_coins(
+                entry["name"],
+                DAILY_BONUS*DAILY_MULTIPLIER**(entry["streak"]-1),
+                coin_reason)
 
     j = open("streaks.json", "w")
     json.dump({"players": streaks}, j)
@@ -119,7 +130,6 @@ def mainloop():
         update_player_list()
         time.sleep(30)
     tprint(f"Stopped checking for players. The function was checking for {round((time.time() - start_time)/60)} minute(s).")
-
 
 thread = Thread(name="mainloop", target=mainloop)
 thread.start()
